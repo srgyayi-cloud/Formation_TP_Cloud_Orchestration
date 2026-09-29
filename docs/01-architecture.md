@@ -6,38 +6,58 @@
 flowchart LR
   U["Navigateur"] -->|"HTTP :8080"| F["frontend<br/>nginx + fichiers statiques"]
   F -->|"/api/*, /version"| B["backend<br/>Node.js + Express"]
-  B --> D[("SQLite<br/>/data/reservations.db")]
+  B -->|"DATABASE_URL"| D[("PostgreSQL")]
 ```
 
 | Composant | Technologie | Rôle |
 |---|---|---|
 | `frontend` | TypeScript, Vite, nginx | Sert l'interface et relaie les appels vers l'API |
-| `backend` | Node.js 24, TypeScript, Express | Expose l'API HTTP, valide les données, applique les règles métier |
-| Base de données | SQLite (module `node:sqlite` intégré à Node.js) | Stocke les réservations dans un fichier |
+| `backend` | Node.js 24, TypeScript, Express, driver `pg` | Expose l'API HTTP, valide les données, applique les règles métier |
+| `db` | PostgreSQL 17 | Stocke les réservations |
 
 ## Pourquoi une seule origine ?
 
 Le navigateur n'appelle que le frontend (`localhost:8080`). nginx transmet ensuite `/api/*` et `/version` au backend. Ce choix évite de gérer le CORS et permet de changer l'adresse de l'API (`API_URL`) sans reconstruire l'interface. En développement, le serveur Vite joue le même rôle grâce à son proxy (`frontend/vite.config.ts`).
 
-## Pourquoi SQLite ?
+## Une API sans état
 
-SQLite stocke toute la base dans un **fichier**. Aucun serveur de base de données n'est à installer, ce qui garde le projet simple. En contrepartie :
+Toutes les données sont dans PostgreSQL : l'API ne stocke rien localement. On peut donc remplacer un conteneur de l'API, ou en lancer plusieurs, sans perdre de données. C'est ce qui permettra plus tard la mise à jour progressive (rolling update) et la mise à l'échelle sur Kubernetes.
 
-- le fichier doit être placé sur un **volume** pour survivre au remplacement du conteneur (voir le TP1) ;
-- un seul processus doit écrire dans ce fichier : l'API ne peut pas être répliquée sur plusieurs conteneurs sans changer de base. C'est une limite à garder en tête lors du passage à Kubernetes.
+Seule la base a besoin d'un stockage persistant : un volume Docker en local (`db-data` dans `compose.yaml`), un volume persistant sur Kubernetes.
+
+## Migrations
+
+Le schéma de la base est décrit par des fichiers SQL numérotés dans `backend/migrations/`. Au démarrage, l'API applique dans l'ordre ceux qui ne l'ont pas encore été et les enregistre dans la table `schema_migrations`. Un verrou PostgreSQL empêche deux instances démarrées en même temps de migrer simultanément.
+
+Règles à respecter :
+
+- une migration déjà appliquée ne se modifie jamais : on en ajoute une nouvelle ;
+- une migration doit rester compatible avec la version précédente de l'API, qui tourne encore pendant un déploiement progressif ou après un rollback.
+
+Pour lancer les migrations séparément (par exemple avant un déploiement), utilisez `npm run db:migrate` et `MIGRATE_ON_START=false`.
 
 ## Organisation du backend
 
 | Fichier | Responsabilité |
 |---|---|
 | `src/config.ts` | Lecture des variables d'environnement et valeurs de secours |
-| `src/db.ts` | Ouverture de la base et création du schéma |
+| `src/db.ts` | Pool de connexions, migrations, vérification de la base |
 | `src/reservations.ts` | Validation des données et accès aux réservations |
 | `src/seed.ts` | Données initiales, insérées si la base est vide |
 | `src/app.ts` | Routes HTTP : santé, version, réservations |
-| `src/server.ts` | Démarrage du serveur et arrêt propre sur `SIGTERM` |
+| `src/server.ts` | Démarrage (migrations, données initiales, serveur) et arrêt propre sur `SIGTERM` |
+| `migrations/*.sql` | Évolutions successives du schéma |
 
-`app.ts` ne démarre pas de serveur : il construit l'application à partir d'une base et d'une configuration. Les tests peuvent ainsi l'utiliser avec une base en mémoire, sans ouvrir de port.
+`app.ts` ne démarre pas de serveur : il construit l'application à partir d'une base et d'une configuration. Les tests l'utilisent ainsi sans ouvrir de port.
+
+## Tests
+
+| Fichier | Type | Base nécessaire |
+|---|---|---|
+| `test/validation.test.ts` | Unitaire : règles de validation | Non |
+| `test/app.test.ts` | Intégration : routes HTTP et requêtes SQL | Oui (`DATABASE_URL`) |
+
+Les tests d'intégration vident la base avant chaque test : utilisez une base dédiée, jamais une base contenant des données à conserver.
 
 ## Organisation du frontend
 

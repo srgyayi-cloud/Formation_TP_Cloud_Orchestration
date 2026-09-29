@@ -1,15 +1,34 @@
 # Lance l'ensemble en local : docker compose up --build
 # Interface : http://localhost:8080 — API : http://localhost:3000
+# Base seule, pour développer sans conteneuriser l'API : docker compose up -d db
 name: reservations
 
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      # Identifiants de développement local uniquement
+      POSTGRES_USER: reservations
+      POSTGRES_PASSWORD: reservations
+      POSTGRES_DB: reservations
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservations -d reservations"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   backend:
-    # TODO (TP1) : écrire backend/Dockerfile
+    # TODO (TP conteneurisation) : écrire backend/Dockerfile
     build:
       context: ./backend
       # TODO : transmettre la version à l'image
-    # TODO : définir APP_VERSION et GIT_COMMIT à l'exécution
-    # TODO : monter un volume pour conserver la base SQLite
+    # TODO : définir APP_VERSION, GIT_COMMIT et DATABASE_URL à l'exécution
+    # TODO : attendre que la base soit prête avant de démarrer
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -29,4 +48,5 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-# TODO : déclarer le volume de la base
+volumes:
+  db-data:

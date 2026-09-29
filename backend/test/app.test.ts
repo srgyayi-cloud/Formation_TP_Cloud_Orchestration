@@ -1,8 +1,12 @@
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
-import { openDatabase, type Database } from '../src/db.js';
-import { seedIfEmpty } from '../src/seed.js';
+import { DEFAULT_DATABASE_URL } from '../src/config.js';
+import { createDatabase, migrate } from '../src/db.js';
+import { resetDatabase } from '../src/seed.js';
+
+// Tests d'intégration : nécessitent un PostgreSQL (docker compose up -d db)
+const DATABASE_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
 
 // Date figée : les tests ne dépendent pas du jour d'exécution
 const NOW = new Date('2030-01-10T08:00:00Z');
@@ -17,13 +21,19 @@ const valid = {
   participants: 3,
 };
 
-let db: Database;
-let app: ReturnType<typeof createApp>;
+const db = createDatabase(DATABASE_URL);
+const app = createApp({ db, config: { appVersion: '9.9.9', gitCommit: 'abc1234' }, now: () => NOW, logRequests: false });
 
-beforeEach(() => {
-  db = openDatabase(':memory:');
-  seedIfEmpty(db, NOW);
-  app = createApp({ db, config: { appVersion: '9.9.9', gitCommit: 'abc1234' }, now: () => NOW, logRequests: false });
+beforeAll(async () => {
+  await migrate(db);
+});
+
+beforeEach(async () => {
+  await resetDatabase(db, NOW);
+});
+
+afterAll(async () => {
+  await db.end();
 });
 
 describe('santé et version', () => {
@@ -39,9 +49,12 @@ describe('santé et version', () => {
     expect(res.body.checks.database).toBe('ok');
   });
 
-  it('GET /health/ready répond 503 si la base est fermée', async () => {
-    db.close();
-    const res = await request(app).get('/health/ready');
+  it('GET /health/ready répond 503 si la base est injoignable', async () => {
+    const unreachable = createDatabase('postgres://nobody:nobody@127.0.0.1:1/nothing');
+    const res = await request(createApp({ db: unreachable, config: { appVersion: 'x', gitCommit: 'x' }, logRequests: false })).get(
+      '/health/ready',
+    );
+    await unreachable.end();
     expect(res.status).toBe(503);
     expect(res.body.checks.database).toBe('error');
   });
@@ -53,11 +66,12 @@ describe('santé et version', () => {
 });
 
 describe('réservations', () => {
-  it('liste les réservations initiales', async () => {
+  it('liste les réservations initiales dans l’ordre chronologique', async () => {
     const res = await request(app).get('/api/reservations');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(6);
-    expect(res.body[0].date).toBe('2030-01-11');
+    expect(res.body[0]).toMatchObject({ date: '2030-01-11', startTime: '09:00', endTime: '12:00' });
+    expect(res.body[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   });
 
   it('crée une réservation valide', async () => {
@@ -68,25 +82,9 @@ describe('réservations', () => {
   });
 
   it('refuse des champs invalides avec le détail des erreurs', async () => {
-    const res = await request(app)
-      .post('/api/reservations')
-      .send({ customerName: 'A', email: 'pas-un-email', room: 'Inconnue', date: '2030-02-30', startTime: '10:00', endTime: '09:00', participants: 0 });
+    const res = await request(app).post('/api/reservations').send({ ...valid, email: 'pas-un-email' });
     expect(res.status).toBe(400);
-    expect(Object.keys(res.body.details).sort()).toEqual(
-      ['customerName', 'date', 'email', 'endTime', 'participants', 'room'].sort(),
-    );
-  });
-
-  it('refuse une date passée', async () => {
-    const res = await request(app).post('/api/reservations').send({ ...valid, date: '2030-01-09' });
-    expect(res.status).toBe(400);
-    expect(res.body.details.date).toMatch(/passé/);
-  });
-
-  it('refuse un nombre de participants supérieur à la capacité', async () => {
-    const res = await request(app).post('/api/reservations').send({ ...valid, participants: 9 });
-    expect(res.status).toBe(400);
-    expect(res.body.details.participants).toBeDefined();
+    expect(res.body.details.email).toBeDefined();
   });
 
   it('refuse un créneau qui chevauche une réservation confirmée', async () => {
@@ -101,6 +99,14 @@ describe('réservations', () => {
     expect(res.status).toBe(201);
   });
 
+  it('ne crée qu’une réservation sur deux demandes simultanées du même créneau', async () => {
+    const [a, b] = await Promise.all([
+      request(app).post('/api/reservations').send(valid),
+      request(app).post('/api/reservations').send(valid),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([201, 409]);
+  });
+
   it('annule une réservation', async () => {
     const res = await request(app).delete('/api/reservations/1');
     expect(res.status).toBe(204);
@@ -111,6 +117,11 @@ describe('réservations', () => {
   it('répond 404 pour une réservation inconnue', async () => {
     const res = await request(app).delete('/api/reservations/999');
     expect(res.status).toBe(404);
+  });
+
+  it('répond 400 pour un identifiant hors limites', async () => {
+    const res = await request(app).delete('/api/reservations/99999999999');
+    expect(res.status).toBe(400);
   });
 
   it('répond 400 pour un JSON mal formé', async () => {

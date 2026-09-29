@@ -26,18 +26,18 @@ function addDays(date: Date, days: number): string {
   return toIsoDate(copy);
 }
 
-export function seedIfEmpty(db: Database, now: Date = new Date()): number {
-  const row = db.prepare('SELECT COUNT(*) AS count FROM reservations').get();
-  if (Number(row?.count ?? 0) > 0) return 0;
+export async function seedIfEmpty(db: Database, now: Date = new Date()): Promise<number> {
+  const { rows } = await db.query<{ count: string }>('SELECT count(*) AS count FROM reservations');
+  if (Number(rows[0]?.count ?? 0) > 0) return 0;
 
   const repository = new ReservationRepository(db);
   for (const { inDays, status, ...entry } of SEED) {
-    repository.create({ ...entry, date: addDays(now, inDays) }, status);
+    await repository.create({ ...entry, date: addDays(now, inDays) }, status);
   }
   return SEED.length;
 }
 
-export function resetDatabase(db: Database, now: Date = new Date()): number {
-  db.exec("DELETE FROM reservations; DELETE FROM sqlite_sequence WHERE name = 'reservations';");
+export async function resetDatabase(db: Database, now: Date = new Date()): Promise<number> {
+  await db.query('TRUNCATE reservations RESTART IDENTITY');
   return seedIfEmpty(db, now);
 }

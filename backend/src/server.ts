@@ -1,14 +1,17 @@
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
-import { openDatabase } from './db.js';
+import { createDatabase, migrate } from './db.js';
 import { seedIfEmpty } from './seed.js';
 
 const config = loadConfig();
-const db = openDatabase(config.databasePath);
+const db = createDatabase(config.databaseUrl);
 
-const seeded = seedIfEmpty(db);
-if (seeded > 0) {
-  console.log(`Base initialisée avec ${seeded} réservations.`);
+// Désactivable (MIGRATE_ON_START=false) quand les migrations sont lancées à part
+if (config.migrateOnStart) {
+  const applied = await migrate(db);
+  for (const version of applied) console.log(`Migration appliquée : ${version}`);
+  const seeded = await seedIfEmpty(db);
+  if (seeded > 0) console.log(`Base initialisée avec ${seeded} réservations.`);
 }
 
 let shuttingDown = false;
@@ -24,8 +27,7 @@ function shutdown(signal: string) {
   shuttingDown = true;
   console.log(`${signal} reçu, arrêt en cours…`);
   server.close(() => {
-    db.close();
-    process.exit(0);
+    db.end().finally(() => process.exit(0));
   });
   setTimeout(() => process.exit(1), 10_000).unref();
 }

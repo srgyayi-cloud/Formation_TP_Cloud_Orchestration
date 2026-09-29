@@ -8,10 +8,11 @@ Prérequis : Docker avec le plugin Compose, et le `Dockerfile` de l'API écrit l
 docker compose up --build
 ```
 
-Compose construit les deux images, crée un volume pour la base puis démarre :
+Compose construit les deux images, crée un volume pour la base puis démarre, chacun **seulement quand le précédent est prêt** (`depends_on` avec `condition: service_healthy`) :
 
-1. `backend` sur le port 3000 ;
-2. `frontend` sur le port 8080, **seulement quand le backend est prêt** (`depends_on` avec `condition: service_healthy`).
+1. `db` (PostgreSQL) sur le port 5432 ;
+2. `backend` sur le port 3000, qui applique les migrations puis charge les données initiales ;
+3. `frontend` sur le port 8080.
 
 Commandes utiles :
 
@@ -22,13 +23,16 @@ docker compose down               # arrêt (la base est conservée dans le volum
 docker compose down -v            # arrêt et suppression de la base
 ```
 
-## Option 2 : sans Docker
+## Option 2 : sans conteneuriser l'API
 
-Prérequis : Node.js 24 ou plus récent (`node --version`).
+Prérequis : Node.js 24 ou plus récent (`node --version`) et Docker pour la base.
 
 ```bash
+docker compose up -d db
 cd backend && npm install && npm run dev
 ```
+
+L'API se connecte par défaut à `postgres://reservations:reservations@localhost:5432/reservations`, les identifiants de développement définis dans `compose.yaml`. Pour utiliser un autre serveur PostgreSQL, définissez `DATABASE_URL`.
 
 Dans un second terminal :
 
@@ -49,7 +53,16 @@ cd backend
 npm run db:reset
 ```
 
-En local, la base est stockée dans `backend/data/reservations.db`. Ce dossier est ignoré par Git.
+## Lancer les tests
+
+Les tests d'intégration de l'API ont besoin de la base :
+
+```bash
+docker compose up -d db
+cd backend && npm test
+```
+
+Ils vident la table des réservations avant chaque test : relancez `npm run db:reset` ensuite si vous voulez retrouver les données de démonstration.
 
 ## Construire l'image du frontend seule
 

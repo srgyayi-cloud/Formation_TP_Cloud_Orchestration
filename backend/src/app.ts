@@ -4,6 +4,9 @@ import { pingDatabase, type Database } from './db.js';
 import { ReservationRepository, ROOMS, validateReservation } from './reservations.js';
 import { toIsoDate } from './seed.js';
 
+// Plus grand identifiant possible (colonne integer de PostgreSQL)
+const MAX_ID = 2_147_483_647;
+
 export interface AppOptions {
   db: Database;
   config: Pick<Config, 'appVersion' | 'gitCommit'>;
@@ -41,14 +44,14 @@ export function createApp({
     res.json({ status: 'ok' });
   });
 
-  // Readiness : le service peut traiter des requêtes, donc la base SQLite répond.
-  app.get('/health/ready', (_req, res) => {
+  // Readiness : le service peut traiter des requêtes, donc PostgreSQL répond.
+  app.get('/health/ready', async (_req, res) => {
     if (isShuttingDown()) {
       res.status(503).json({ status: 'shutting-down', checks: { database: 'skipped' } });
       return;
     }
     try {
-      pingDatabase(db);
+      await pingDatabase(db);
       res.json({ status: 'ready', checks: { database: 'ok' } });
     } catch {
       res.status(503).json({ status: 'not-ready', checks: { database: 'error' } });
@@ -63,17 +66,17 @@ export function createApp({
     res.json(Object.entries(ROOMS).map(([name, capacity]) => ({ name, capacity })));
   });
 
-  app.get('/api/reservations', (_req, res) => {
-    res.json(reservations.list());
+  app.get('/api/reservations', async (_req, res) => {
+    res.json(await reservations.list());
   });
 
-  app.post('/api/reservations', (req, res) => {
+  app.post('/api/reservations', async (req, res) => {
     const validation = validateReservation(req.body, toIsoDate(now()));
     if (!validation.ok) {
       res.status(400).json({ error: 'validation', message: 'Données invalides.', details: validation.errors });
       return;
     }
-    const result = reservations.create(validation.value);
+    const result = await reservations.create(validation.value);
     if (!result.ok) {
       const { conflict } = result;
       res.status(409).json({
@@ -85,13 +88,13 @@ export function createApp({
     res.status(201).location(`/api/reservations/${result.reservation.id}`).json(result.reservation);
   });
 
-  app.delete('/api/reservations/:id', (req, res) => {
+  app.delete('/api/reservations/:id', async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id < 1) {
+    if (!Number.isInteger(id) || id < 1 || id > MAX_ID) {
       res.status(400).json({ error: 'validation', message: "L'identifiant doit être un entier positif." });
       return;
     }
-    if (!reservations.cancel(id)) {
+    if (!(await reservations.cancel(id))) {
       res.status(404).json({ error: 'not_found', message: `Réservation ${id} introuvable.` });
       return;
     }

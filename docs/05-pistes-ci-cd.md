@@ -22,6 +22,8 @@ Pour chaque application (`backend`, `frontend`), à chaque push et chaque demand
 3. lancer les tests avec `npm test` ;
 4. construire avec `npm run build`.
 
+Les tests de l'API ont besoin d'un PostgreSQL : la CI devra en fournir un.
+
 Questions à se poser :
 
 - Faut-il reconstruire le frontend quand seul le backend a changé ?
@@ -39,8 +41,8 @@ Questions à se poser :
 
 - Déployer les images publiées, sans les reconstruire.
 - Brancher les sondes : `livenessProbe` sur `/health/live`, `readinessProbe` sur `/health/ready` (API) et `/healthz` (frontend).
-- Monter un volume persistant sur le dossier de la base SQLite.
-- Garder à l'esprit que SQLite impose **un seul réplica** de l'API.
+- Déployer PostgreSQL avec un volume persistant, et fournir ses identifiants à l'API par un secret.
+- Décider où appliquer les migrations : au démarrage de l'API ou dans une tâche dédiée avant le déploiement.
 
 ## Étape 4 — Vérification après déploiement
 

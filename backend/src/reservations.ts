@@ -93,18 +93,40 @@ export function validateReservation(body: unknown, today: string): ValidationRes
   };
 }
 
-function toReservation(row: Record<string, unknown>): Reservation {
+// Dates et heures formatées par PostgreSQL : aucune conversion de fuseau côté Node
+const COLUMNS = `
+  id, customer_name, email, room,
+  to_char(date, 'YYYY-MM-DD') AS date,
+  to_char(start_time, 'HH24:MI') AS start_time,
+  to_char(end_time, 'HH24:MI') AS end_time,
+  participants, status,
+  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at`;
+
+interface ReservationRow {
+  id: number;
+  customer_name: string;
+  email: string;
+  room: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  participants: number;
+  status: ReservationStatus;
+  created_at: string;
+}
+
+function toReservation(row: ReservationRow): Reservation {
   return {
-    id: Number(row.id),
-    customerName: String(row.customer_name),
-    email: String(row.email),
-    room: String(row.room),
-    date: String(row.date),
-    startTime: String(row.start_time),
-    endTime: String(row.end_time),
-    participants: Number(row.participants),
-    status: row.status as ReservationStatus,
-    createdAt: String(row.created_at),
+    id: row.id,
+    customerName: row.customer_name,
+    email: row.email,
+    room: row.room,
+    date: row.date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    participants: row.participants,
+    status: row.status,
+    createdAt: row.created_at,
   };
 }
 
@@ -115,55 +137,63 @@ export type CreateResult =
 export class ReservationRepository {
   constructor(private readonly db: Database) {}
 
-  list(): Reservation[] {
-    return this.db
-      .prepare('SELECT * FROM reservations ORDER BY date, start_time, id')
-      .all()
-      .map(toReservation);
+  async list(): Promise<Reservation[]> {
+    const { rows } = await this.db.query<ReservationRow>(
+      `SELECT ${COLUMNS} FROM reservations ORDER BY reservations.date, reservations.start_time, id`,
+    );
+    return rows.map(toReservation);
   }
 
-  findById(id: number): Reservation | undefined {
-    const row = this.db.prepare('SELECT * FROM reservations WHERE id = ?').get(id);
-    return row ? toReservation(row) : undefined;
-  }
+  async create(input: NewReservation, status: ReservationStatus = 'confirmed'): Promise<CreateResult> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      // Sérialise les créations sur une même salle et un même jour
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${input.room}|${input.date}`]);
 
-  create(input: NewReservation, status: ReservationStatus = 'confirmed'): CreateResult {
-    // Deux créneaux se chevauchent si l'un commence avant la fin de l'autre
-    const overlap = this.db
-      .prepare(
-        `SELECT * FROM reservations
-         WHERE room = ? AND date = ? AND status = 'confirmed'
-           AND start_time < ? AND end_time > ?
-         LIMIT 1`,
-      )
-      .get(input.room, input.date, input.endTime, input.startTime);
-    if (overlap && status === 'confirmed') {
-      return { ok: false, conflict: toReservation(overlap) };
-    }
+      if (status === 'confirmed') {
+        // Deux créneaux se chevauchent si l'un commence avant la fin de l'autre
+        const overlap = await client.query<ReservationRow>(
+          `SELECT ${COLUMNS} FROM reservations
+           WHERE room = $1 AND reservations.date = $2 AND status = 'confirmed'
+             AND reservations.start_time < $3 AND reservations.end_time > $4
+           LIMIT 1`,
+          [input.room, input.date, input.endTime, input.startTime],
+        );
+        if (overlap.rows[0]) {
+          await client.query('ROLLBACK');
+          return { ok: false, conflict: toReservation(overlap.rows[0]) };
+        }
+      }
 
-    const result = this.db
-      .prepare(
+      const { rows } = await client.query<ReservationRow>(
         `INSERT INTO reservations (customer_name, email, room, date, start_time, end_time, participants, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        input.customerName,
-        input.email,
-        input.room,
-        input.date,
-        input.startTime,
-        input.endTime,
-        input.participants,
-        status,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING ${COLUMNS}`,
+        [
+          input.customerName,
+          input.email,
+          input.room,
+          input.date,
+          input.startTime,
+          input.endTime,
+          input.participants,
+          status,
+        ],
       );
-    return { ok: true, reservation: this.findById(Number(result.lastInsertRowid))! };
+      await client.query('COMMIT');
+      return { ok: true, reservation: toReservation(rows[0]!) };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   // Annulation logique : la réservation reste visible avec le statut "cancelled"
-  cancel(id: number): boolean {
-    const result = this.db
-      .prepare("UPDATE reservations SET status = 'cancelled' WHERE id = ?")
-      .run(id);
-    return Number(result.changes) > 0;
+  async cancel(id: number): Promise<boolean> {
+    const result = await this.db.query("UPDATE reservations SET status = 'cancelled' WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
   }
 }

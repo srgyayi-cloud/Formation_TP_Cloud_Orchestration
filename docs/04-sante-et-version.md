@@ -15,7 +15,7 @@ Répond toujours `200 {"status":"ok"}` tant que le serveur HTTP fonctionne. Elle
 
 ### `/health/ready`
 
-Exécute une vraie requête `SELECT 1` sur la base SQLite, la seule dépendance de l'API.
+Exécute une vraie requête `SELECT 1` sur PostgreSQL, la seule dépendance de l'API.
 
 ```json
 { "status": "ready", "checks": { "database": "ok" } }
@@ -25,6 +25,8 @@ Elle répond `503` dans deux cas :
 
 - la base ne répond pas : `{"status":"not-ready","checks":{"database":"error"}}` ;
 - l'API est en cours d'arrêt : après réception de `SIGTERM`, elle se déclare non prête pour qu'on arrête de lui envoyer du trafic, termine les requêtes en cours puis s'arrête.
+
+Pour l'observer : `docker compose stop db`, puis appelez les deux sondes. `/health/live` répond toujours `200` (le processus va bien), `/health/ready` répond `503` (il ne peut pas servir de requêtes). Relancez la base avec `docker compose start db` : l'API redevient prête sans redémarrer.
 
 > Une sonde de readiness ne doit vérifier que des dépendances **réelles**. Annoncer un contrôle qui n'existe pas donnerait une fausse impression de sécurité.
 

@@ -1,9 +1,12 @@
 import { loadConfig } from '../config.js';
-import { openDatabase } from '../db.js';
+import { createDatabase, migrate } from '../db.js';
 import { resetDatabase } from '../seed.js';
 
-const { databasePath } = loadConfig();
-const db = openDatabase(databasePath);
-const count = resetDatabase(db);
-db.close();
-console.log(`Base ${databasePath} réinitialisée avec ${count} réservations.`);
+const db = createDatabase(loadConfig().databaseUrl);
+try {
+  await migrate(db);
+  const count = await resetDatabase(db);
+  console.log(`Base réinitialisée avec ${count} réservations.`);
+} finally {
+  await db.end();
+}
