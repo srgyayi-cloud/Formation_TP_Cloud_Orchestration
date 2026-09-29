@@ -1,0 +1,32 @@
+# Lance l'ensemble en local : docker compose up --build
+# Interface : http://localhost:8080 — API : http://localhost:3000
+name: reservations
+
+services:
+  backend:
+    # TODO (TD 06) : écrire backend/Dockerfile
+    build:
+      context: ./backend
+      # TODO : transmettre la version à l'image
+    # TODO : définir APP_VERSION et GIT_COMMIT à l'exécution
+    # TODO : monter un volume pour conserver la base SQLite
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-1.0.0}
+    environment:
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+      API_URL: http://backend:3000
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+# TODO : déclarer le volume de la base

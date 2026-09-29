@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Réservations de salles</title>
+  </head>
+  <body>
+    <div id="version-banner" class="version-banner" role="status">
+      <span>Frontend <strong id="frontend-version">…</strong></span>
+      <span>API <strong id="api-version">…</strong></span>
+    </div>
+
+    <header class="page-header">
+      <h1>Réservations de salles</h1>
+      <p>Consultez, créez et annulez les réservations des salles de formation.</p>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <h2>Nouvelle réservation</h2>
+        <form id="reservation-form" novalidate>
+          <label>
+            Nom
+            <input name="customerName" required minlength="2" maxlength="100" />
+            <small class="field-error" data-error-for="customerName"></small>
+          </label>
+          <label>
+            E-mail
+            <input name="email" type="email" required />
+            <small class="field-error" data-error-for="email"></small>
+          </label>
+          <label>
+            Salle
+            <select name="room" id="room-select" required></select>
+            <small class="field-error" data-error-for="room"></small>
+          </label>
+          <label>
+            Date
+            <input name="date" type="date" required />
+            <small class="field-error" data-error-for="date"></small>
+          </label>
+          <div class="row">
+            <label>
+              Début
+              <input name="startTime" type="time" required />
+              <small class="field-error" data-error-for="startTime"></small>
+            </label>
+            <label>
+              Fin
+              <input name="endTime" type="time" required />
+              <small class="field-error" data-error-for="endTime"></small>
+            </label>
+          </div>
+          <label>
+            Participants
+            <input name="participants" type="number" min="1" value="1" required />
+            <small class="field-error" data-error-for="participants"></small>
+          </label>
+          <button type="submit">Réserver</button>
+          <p id="form-message" class="message" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="list-header">
+          <h2>Réservations</h2>
+          <label class="toggle">
+            <input type="checkbox" id="show-cancelled" checked />
+            Afficher les annulées
+          </label>
+        </div>
+        <p id="list-message" class="message" aria-live="polite"></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Créneau</th>
+              <th>Salle</th>
+              <th>Réservé par</th>
+              <th>Pers.</th>
+              <th>Statut</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="reservations-body"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

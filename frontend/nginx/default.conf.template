@@ -1,0 +1,31 @@
+# Les variables ${APP_VERSION} et ${API_URL} sont remplacées au démarrage du conteneur
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    # Version du frontend, lue à l'exécution : pas besoin de reconstruire l'image
+    location = /config.json {
+        default_type application/json;
+        add_header Cache-Control "no-store";
+        return 200 '{ "version": "${APP_VERSION}" }';
+    }
+
+    # Sonde de santé propre au frontend (nginx répond)
+    location = /healthz {
+        default_type text/plain;
+        return 200 'ok';
+    }
+
+    # Relais vers l'API : le navigateur n'appelle qu'une seule origine
+    location /api/ {
+        proxy_pass ${API_URL};
+    }
+
+    location = /version {
+        proxy_pass ${API_URL};
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
