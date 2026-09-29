@@ -4,7 +4,7 @@ name: reservations
 
 services:
   backend:
-    # TODO (TD 06) : écrire backend/Dockerfile
+    # TODO (TP1) : écrire backend/Dockerfile
     build:
       context: ./backend
       # TODO : transmettre la version à l'image

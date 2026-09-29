@@ -24,11 +24,11 @@ flowchart LR
 
 Chaque application est autonome : elle a son propre `package.json` et ses tests. Une pipeline pourra donc les construire et les livrer séparément.
 
-Le frontend est fourni avec son `Dockerfile`. Celui de l'API est à écrire : c'est l'objet du [TD 06](docs/06-td-conteneuriser-api.md).
+Le frontend est fourni avec son `Dockerfile`. Celui de l'API est à écrire : c'est l'objet du TP1, dont la consigne est disponible dans l'intranet de formation.
 
 ## Démarrage rapide
 
-### Avec Docker Compose (après le TD 06)
+### Avec Docker Compose (après le TP1)
 
 ```bash
 docker compose up --build
@@ -87,4 +87,3 @@ npm run dev
 3. [Référence de l'API](docs/03-api.md)
 4. [Santé et version](docs/04-sante-et-version.md)
 5. [Pistes pour la chaîne CI/CD](docs/05-pistes-ci-cd.md)
-6. [TD : conteneuriser l'API](docs/06-td-conteneuriser-api.md)

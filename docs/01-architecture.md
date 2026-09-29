@@ -23,7 +23,7 @@ Le navigateur n'appelle que le frontend (`localhost:8080`). nginx transmet ensui
 
 SQLite stocke toute la base dans un **fichier**. Aucun serveur de base de données n'est à installer, ce qui garde le projet simple. En contrepartie :
 
-- le fichier doit être placé sur un **volume** pour survivre au remplacement du conteneur (voir le [TD 06](06-td-conteneuriser-api.md)) ;
+- le fichier doit être placé sur un **volume** pour survivre au remplacement du conteneur (voir le TP1) ;
 - un seul processus doit écrire dans ce fichier : l'API ne peut pas être répliquée sur plusieurs conteneurs sans changer de base. C'est une limite à garder en tête lors du passage à Kubernetes.
 
 ## Organisation du backend

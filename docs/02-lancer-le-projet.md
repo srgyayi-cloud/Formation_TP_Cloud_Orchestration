@@ -2,7 +2,7 @@
 
 ## Option 1 : Docker Compose
 
-Prérequis : Docker avec le plugin Compose, et le `Dockerfile` de l'API écrit lors du [TD 06](06-td-conteneuriser-api.md).
+Prérequis : Docker avec le plugin Compose, et le `Dockerfile` de l'API écrit lors du TP1.
 
 ```bash
 docker compose up --build

@@ -34,7 +34,7 @@ nginx expose `/healthz`, qui répond `ok` dès que le serveur web fonctionne. Le
 
 ### Dans Docker
 
-Le `Dockerfile` du frontend déclare un `HEALTHCHECK` sur `/healthz`. Celui de l'API, que vous écrirez au [TD 06](06-td-conteneuriser-api.md), devra en déclarer un aussi. `docker compose ps` affiche l'état `healthy` ou `unhealthy`, et Compose attend que l'API soit `healthy` avant de démarrer le frontend.
+Le `Dockerfile` du frontend déclare un `HEALTHCHECK` sur `/healthz`. Celui de l'API, que vous écrirez au TP1, devra en déclarer un aussi. `docker compose ps` affiche l'état `healthy` ou `unhealthy`, et Compose attend que l'API soit `healthy` avant de démarrer le frontend.
 
 ## La version affichée
 
