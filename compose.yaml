@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   backend:
-    # TODO (TP conteneurisation) : écrire backend/Dockerfile
+    # TODO (TP 2-A) : écrire backend/Dockerfile
     build:
       context: ./backend
       # TODO : transmettre la version à l'image

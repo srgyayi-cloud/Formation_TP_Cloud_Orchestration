@@ -2,7 +2,7 @@
 
 ## Option 1 : Docker Compose
 
-Prérequis : Docker avec le plugin Compose, et le `Dockerfile` de l'API écrit lors du TP1.
+Prérequis : Docker avec le plugin Compose, et le `Dockerfile` de l'API écrit lors du TP 2-A.
 
 ```bash
 docker compose up --build
