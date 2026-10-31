@@ -1,0 +1,31 @@
+# Dépendances installées localement : l'image les recrée avec npm ci
+node_modules
+
+# Résultats de build : l'image les recrée avec npm run build
+dist
+coverage
+*.tsbuildinfo
+
+# Tests : non lancés dans l'image
+test
+
+# Secrets et configuration locale
+.env
+.env.*
+
+# Versionnement et éditeurs
+.git
+.gitignore
+.vscode
+.idea
+
+# Journaux et fichiers système
+*.log
+npm-debug.log*
+.DS_Store
+
+# Documentation et fichiers Docker eux-mêmes
+README.md
+docs
+Dockerfile
+.dockerignore
