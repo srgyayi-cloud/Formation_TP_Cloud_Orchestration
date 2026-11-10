@@ -6,11 +6,15 @@ on:
 
 jobs:
   verify:
-    name: Vérifier le backend
+    name: Vérifier ${{ matrix.app }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
     defaults:
       run:
-        working-directory: backend
+        working-directory: ${{ matrix.app }}
 
     services:
       postgres:
