@@ -1,0 +1,138 @@
+- Quel runtime, et dans quelle version ?
+Node.js avec une version 24 ou supérieure
+
+- Quelles commandes pour installer les dépendances, compiler et démarrer ?
+Dépendances : npm ci
+Compliation : npm run build 
+Démarrage: npm run start 
+
+- Quels fichiers sont nécessaires à l'exécution (et lesquels ne le sont pas) ?
+Node.js démarre l'API à partir du fichier dist/server.js
+
+Fichiers nécessaires quand le conteneur fonctionne
+- dist/server.js : contient le programme qui fait fonctionner l'API.
+- node_modules/ : contient les bibliothèques utilisées par l'API ; dépendances de production uniquement (npm ci --omit=dev, donc express et pg)
+- migrations/ : contient les fichiers SQL nécessaires pour préparer la base de données au démarrage.
+- package.json : décrit le projet et ses dépendances ; il est notamment utile pour installer celles-ci 
+et lancer l'application. Indispensable à cause de "type": "module"
+
+Fichiers qui ne sont normalement pas nécessaires quand le conteneur fonctionne
+- src/ : contient le code source utilisé pour fabriquer le programme final.
+- test/ : contient les fichiers permettant de vérifier que le programme fonctionne.
+- tsconfig.json et tsconfig.build.json : expliquent à TypeScript comment transformer le code source.
+- .git/ : contient l'historique des modifications du projet.
+
+- Quel port, quelles variables d'environnement ?
+
+L’API écoute sur le port 3000 (variable PORT). D’après src/config.ts, appelée par server.ts, elle lit cinq variables : 
+PORT, DATABASE_URL, MIGRATE_ON_START, APP_VERSION et GIT_COMMIT. DATABASE_URL doit être fournie à l’exécution (défaut localhost, 
+inutilisable en conteneur, et contient un mot de passe) ; APP_VERSION et GIT_COMMIT sont passées au build pour versionner l’image ; 
+PORT et MIGRATE_ON_START gardent leur défaut.
+
+- Comment l'API réagit-elle à un arrêt demandé par Docker ?
+
+L’API gère l’arrêt propre dans src/server.ts : elle écoute SIGTERM (envoyé par Docker) et SIGINT, passe un drapeau shuttingDown à true, 
+puis appelle server.close() pour finir les requêtes en cours. Docker envoie SIGTERM uniquement au processus PID 1 du conteneur, c’est-à-dire 
+le processus lancé par la commande CMD. Il faut donc démarrer avec CMD ["node", "dist/server.js"] (forme exec, qui lance node directement, sans shell) 
+pour que node soit le PID 1 et reçoive le signal. Avec npm run start ou la forme shell, le PID 1 serait npm ou sh, qui ne retransmet pas le signal de façon 
+fiable à Node : Docker enverrait alors SIGKILL après 10 secondes, coupant brutalement les requêtes en cours.
+
+- Relancez le conteneur de l'API avec -e APP_VERSION=1.0.1 : la version change-t-elle sans reconstruire l'image ?
+
+Oui. Après avoir relancé le conteneur avec -e APP_VERSION=1.0.1, GET /version renvoie {"version":"1.0.1","commit":"52c06ff"}, 
+sans reconstruire l’image. Le ENV APP_VERSION du Dockerfile ne fixe qu’une valeur par défaut, gravée au build à partir de l’ARG. 
+Une variable passée à docker run -e est prioritaire et la remplace à l’exécution. Le commit, lui, n’a pas changé (52c06ff), 
+car GIT_COMMIT n’a pas été redéfini. Cela montre que la configuration est séparée de l’image : une même image peut tourner avec différentes valeurs.
+
+- Pourquoi l'adresse de la base est-elle db et non localhost ?
+
+Chaque conteneur a son propre réseau isolé. Dans le conteneur de l’API, localhost désigne ce conteneur lui-même, où il n’y a pas de 
+PostgreSQL : la connexion échouerait. La base tourne dans un autre conteneur, nommé db. Sur un réseau Docker créé par l’utilisateur (ici reservations), 
+Docker fournit un DNS interne qui traduit le nom d’un conteneur en son adresse IP. L’API utilise donc db comme nom d’hôte (@db:5432), sans connaître l’adresse IP, 
+qui peut changer à chaque démarrage. Ce DNS n’existe pas sur le réseau par défaut de Docker, d’où la création du réseau reservations.
+
+Justification du choix de la sonde :
+
+J’ai choisi /health/ready. Contrairement à /health/live, qui répond {"status":"ok"} dès que le processus Node tourne, /health/ready vérifie aussi la connexion à 
+PostgreSQL ({"status":"ready","checks":{"database":"ok"}}). L’état (healthy) de docker ps indique alors que l’API peut réellement servir des requêtes, et pas 
+seulement qu’elle est démarrée. C’est aussi cette sonde que Compose pourra attendre avant de démarrer le frontend.
+
+- Comparez avec CMD node dist/server.js : combien de temps prend docker stop ? Pourquoi ?
+
+Avec CMD ["node", "dist/server.js"] (forme exec), docker stop api a pris 0,82 s et docker logs api affiche « SIGTERM reçu, arrêt en cours… ». 
+Avec CMD node dist/server.js (forme shell), j’ai mesuré 0,47 s et le même message.
+
+Je m’attendais à ce que la forme shell soit plus lente, environ 10 secondes. En effet, Docker envoie SIGTERM au premier programme du conteneur (PID 1). 
+Avec la forme shell, Docker lance /bin/sh -c "node dist/server.js", donc le PID 1 pourrait être le shell, qui ne transmet pas toujours le signal à node. 
+Docker attendrait alors 10 secondes avant d’envoyer SIGKILL.
+
+Ce n’est pas ce que j’ai observé. La commande docker exec api ps montre que node dist/server.js est le PID 1 même avec la forme shell : sur cette image Alpine, 
+le shell remplace son processus par node quand la commande est simple. Le signal arrive donc directement à node.
+
+J’ai gardé la forme exec, car elle garantit que node est le PID 1, sans dépendre du comportement du shell. Avec une commande plus complexe (plusieurs commandes enchaînées par exemple), 
+le shell resterait PID 1 et le signal risquerait de ne pas arriver.
+
+- Supprimez le conteneur de l'API avec docker rm -f api, puis recréez-le. La réservation est-elle toujours là ?
+
+Oui, la réservation est toujours là. J’ai créé la réservation id 7 (« Test Persistance »), puis supprimé le conteneur avec docker rm -f api et recréé un conteneur neuf 
+(docker ps indique qu’il date de 5 minutes). GET /api/reservations renvoie toujours les 7 réservations, sans doublon des données de démonstration. Les réservations ne sont 
+pas stockées dans le conteneur de l’API mais dans PostgreSQL.
+
+- Lancez un second conteneur de l'API sur le port 3001, connecté à la même base. Les deux voient-ils les mêmes réservations ?
+
+Oui, les deux conteneurs voient les mêmes réservations. J’ai lancé un second conteneur api2 avec -p 3001:3000, connecté à la même base (@db:5432). GET sur le port 3000 et 
+sur le port 3001 renvoie la même liste, et une réservation créée via le port 3000 est immédiatement visible via le port 3001. L’API ne garde aucun état en mémoire : tout est 
+dans PostgreSQL, donc on peut multiplier les instances de l’API.
+
+- Arrêtez la base (docker stop db) : que deviennent l'état de santé des conteneurs de l'API et les réponses de /health/live et /health/ready ?
+
+En arrêtant la base (docker stop db), api et api2 ne passent pas en (unhealthy) : ils s’arrêtent d’eux-mêmes (Exited (1)). Les logs montrent Unhandled 'error' event puis 
+terminating connection due to administrator command : PostgreSQL coupe les connexions et le code de l’API ne traite pas l’erreur, donc Node plante. Plus aucun processus n’écoute, 
+donc /health/live et /health/ready ne répondent plus (connexion refusée).
+
+- Où sont stockées les données ?
+Dans PostgreSQL, dans le dossier /var/lib/postgresql/data du conteneur db, jamais dans l’API.
+
+- Qu’est-ce qui les protège de la suppression du conteneur db ?
+
+Le volume reservations-db (-v reservations-db:/var/lib/postgresql/data), stocké par Docker en 
+dehors du conteneur : docker rm -f db supprime le conteneur, pas le volume.
+
+--- Restitution
+
+- Pourquoi deux étapes ?
+
+La première étape compile le code avec tous les outils de développement (TypeScript, Vitest...), 
+la seconde ne garde que dist/, migrations/ et les dépendances de production. Avec une seule étape, 
+l’image embarquerait aussi src/ et les outils de build : elle serait plus lourde et exposerait plus 
+de code.
+
+- ARG et ENV
+
+ARG est un réglage qu’on donne pendant la fabrication de l’image : une fois l’image terminée, il n’existe plus. 
+ENV est un réglage conservé dans l’image : l’API peut le lire quand elle tourne.
+
+La version passe par les deux parce qu’on la donne au moment de la fabrication (ARG), puis on la recopie dans 
+ENV pour que l’API puisse l’afficher plus tard.
+
+DATABASE_URL contient un mot de passe et change selon l’endroit où l’API tourne. 
+On la donne donc seulement quand le conteneur démarre, pour ne pas laisser le mot de passe dans l’image.
+
+- Une image par version
+
+Dans le TP, pour changer de version, on modifie seulement une variable. Avec la pipeline, chaque version 
+aura sa propre image, fabriquée une seule fois et rangée dans un registre (un entrepôt d’images) sous un 
+numéro, par exemple 1.1.0.
+
+Pour mettre à jour, on télécharge l’image 1.1.0. Pour revenir en arrière, on télécharge l’ancienne, 
+par exemple 1.0.0. Dans les deux cas, on ne reconstruit rien : on prend une image déjà fabriquée et 
+testée.
+
+- Migrations et rollback
+
+Une migration modifie la structure de la base (par exemple, elle ajoute une colonne). Quand on revient 
+à une ancienne version de l’API, le code redevient ancien, mais la base garde sa nouvelle structure : elle n’est pas défaite.
+
+L’ancienne version de l’API peut alors ne pas comprendre cette structure et se tromper ou planter.
+Pour éviter ça, on écrit des migrations que l’ancienne version supporte encore, ou on lance les migrations 
+séparément (MIGRATE_ON_START=false) pour les contrôler.

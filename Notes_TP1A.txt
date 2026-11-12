@@ -1,0 +1,36 @@
+Le bandeau affiche la version 0.0.0-local et elle correspond à la valeur par défaut définit dans la configuration du backend.
+
+http://localhost:3000/health/live renvoie {"status":"ok"} et {"status":"ready","checks":{"database":"ok"}}
+
+GET /health/live vérifie que l'API est bien en fonctionnement, tandis que 
+
+GET /health/ready vérifie que l'API est prête à fonctionner, notamment en vérifiant l'accès à la base de données.
+
+L'API trouve la base en utilisant l'adresse de connexion par défaut DEFAULT_DATABASE_URL =
+  'postgres://reservations:reservations@localhost:5432/reservations' présente dans le fichier config.ts
+  backend.
+
+Au premier démarrage, Docker lit le fichier docker.compose.yaml pour créer la base et le volume associé 
+
+Requête : curl http://localhost:3000/api/reservations, Code HTTP : 200 OK, Signification : La liste des réservations a été récupérée avec succès
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" 
+-d '{"customerName":"Ada Lovelace","email":"ada@example.com","room":"Hopper","date":"2030-01-20",
+"startTime":"09:00","endTime":"10:00","participants":3}', Code HTTP : 201 Created, Signification : La réservation d'Ada Lovelace a été créée 
+avec succès et porte l'identifiant 7.
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" -d '{"customerName":"Grace Hopper",
+"email":"grace@example.com","room":"Hopper","date":"2030-01-20","startTime":"09:30","endTime":"10:30","participants":2}',
+Code HTTP :  409 Conflict, Signification : L'API refuse la réservation, car la salle Hopper est déjà réservée sur une partie du créneau demandé.
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" -d '{"customerName":"A","email":"pas-un-email",
+"room":"Inconnue","date":"2020-02-28","startTime":"15:00","endTime":"14:00","participants":99}',
+Code HTTP : 400 Bad Request, Signification : l’API a bien détecté plusieurs erreurs dans la réservation. le champ participants n’apparaît pas dans la réponse. 
+Cela signifie que l’API n’a pas signalé cette erreur dans les détails retournés, même si 99 dépasse bien la capacité de la salle Hopper (8 personnes).
+
+Requête : curl -i -X DELETE http://localhost:3000/api/reservations/1, Code HTTTP : 204 No Content, 
+Signification : la réservation n° 1 a été annulée avec succès.
+
+Requête : curl -i -X DELETE http://localhost:3000/api/reservations/9999, Code HTTP : 404 Not Found,
+Signification : la réservation n° 9999 n’existe pas.
+
