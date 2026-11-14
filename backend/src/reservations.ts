@@ -4,6 +4,7 @@ export const ROOMS: Record<string, number> = {
   Turing: 12,
   Lovelace: 20,
   Hopper: 8,
+  Knuth: 16,
 };
 
 export type ReservationStatus = 'confirmed' | 'cancelled';
@@ -135,11 +136,14 @@ export type CreateResult =
   | { ok: false; conflict: Reservation };
 
 export class ReservationRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) { }
 
-  async list(): Promise<Reservation[]> {
+  async list(room?: string): Promise<Reservation[]> {
+    const where = room === undefined ? '' : 'WHERE room = $1';
+    const params = room === undefined ? [] : [room];
     const { rows } = await this.db.query<ReservationRow>(
-      `SELECT ${COLUMNS} FROM reservations ORDER BY reservations.date, reservations.start_time, id`,
+      `SELECT ${COLUMNS} FROM reservations ${where} ORDER BY reservations.date, reservations.start_time, id`,
+      params,
     );
     return rows.map(toReservation);
   }

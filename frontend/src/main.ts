@@ -8,6 +8,7 @@ const listMessage = document.querySelector<HTMLParagraphElement>('#list-message'
 const tbody = document.querySelector<HTMLTableSectionElement>('#reservations-body')!;
 const roomSelect = document.querySelector<HTMLSelectElement>('#room-select')!;
 const showCancelled = document.querySelector<HTMLInputElement>('#show-cancelled')!;
+const roomFilter = document.querySelector<HTMLSelectElement>('#room-filter')!;
 
 let reservations: Reservation[] = [];
 
@@ -32,6 +33,10 @@ async function loadRooms() {
   const rooms = await api.listRooms();
   roomSelect.replaceChildren(
     ...rooms.map(({ name, capacity }) => new Option(`${name} (${capacity} places)`, name)),
+  );
+  roomFilter.replaceChildren(
+    new Option('Toutes les salles', ''),
+    ...rooms.map(({ name }) => new Option(name, name)),
   );
 }
 
@@ -72,12 +77,16 @@ function renderReservations() {
 }
 
 async function loadReservations() {
+  const room = roomFilter.value;
   try {
-    reservations = await api.listReservations();
+    const result = await api.listReservations(room || undefined);
+    if (room !== roomFilter.value) return; // réponse périmée : une autre salle a été choisie entre-temps
+    reservations = result;
     setMessage(listMessage, '');
     renderReservations();
   } catch {
-    setMessage(listMessage, "Impossible de charger les réservations : l'API est-elle démarrée ?", 'error');
+    if (room !== roomFilter.value) return;
+    setMessage(listMessage, "Impossible de charger les réservations : l'API est-elle démarrée?", 'error');
   }
 }
 
@@ -126,6 +135,7 @@ form.addEventListener('submit', async (event) => {
 });
 
 showCancelled.addEventListener('change', renderReservations);
+roomFilter.addEventListener('change', loadReservations);
 
 loadVersions();
 loadRooms().catch(() => setMessage(formMessage, 'Impossible de charger les salles.', 'error'));

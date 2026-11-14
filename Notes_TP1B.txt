@@ -1,0 +1,25 @@
+Ex 2 : pourquoi deux petites branches plutôt qu’une seule ?
+
+Deux petites branches se relisent plus vite et plus sérieusement qu’une grosse pull request. Elles permettent de travailler en parallèle (l’API d’un côté, l’interface de l’autre) sans se bloquer. Chaque changement est fusionné dès qu’il est prêt, ce qui limite les conflits, car les branches vivent peu de temps. Si un problème apparaît, il est plus facile à localiser et à annuler.
+
+Ex 4 : comment s’organiser quand l’interface dépend de l’API ?
+
+L’API est fusionnée en premier, car elle est complète et testable seule. L’interface peut être développée en parallèle, puisque le contrat est connu (paramètre room, route /api/rooms), mais le test de bout en bout se fait une fois l’API fusionnée : la personne de l’interface met alors à jour sa branche avec main et teste dans le navigateur.
+
+Ex 5 : quelle stratégie de fusion, et pourquoi ?
+
+Nous choisissons le merge commit. Nos branches sont courtes et leurs commits sont atomiques : chacun fait une seule chose claire, avec un message explicite. Nous voulons donc les conserver tels quels. Le merge commit garde cet historique détaillé et laisse aussi la trace de chaque pull request dans l’historique. Le squash serait préférable si une branche contenait des commits brouillons (« wip », « typo »), car il les regrouperait en un seul. Le rebase donne un historique en ligne droite, mais il réécrit les commits, ce qui est inutilement risqué quand on travaille à deux sur le même dépôt.
+
+Ex. 11 : restitution 
+
+- Qu’apportent les branches courtes et les petites PR ?
+
+Des relectures plus rapides et plus fiables, moins de conflits, un travail en parallèle, et un historique facile à comprendre.
+
+- Qu’est-ce qui empêche aujourd’hui une PR qui casse les tests d’être fusionnée ?
+
+Rien d’automatique : seule la relecture humaine peut le détecter. Il n’y a pas de vérification automatique des tests sur les PR.
+
+- Qu’a dû faire le relecteur à la main, qui pourrait être automatisé ?
+
+Lancer npm run lint et npm test sur la branche, et vérifier le format des messages de commit. Une intégration continue pourrait le faire automatiquement.

@@ -4,6 +4,7 @@ import { createApp } from '../src/app.js';
 import { DEFAULT_DATABASE_URL } from '../src/config.js';
 import { createDatabase, migrate } from '../src/db.js';
 import { resetDatabase } from '../src/seed.js';
+import { ROOMS } from '../src/reservations.js';
 
 // Tests d'intégration : nécessitent un PostgreSQL (docker compose up -d db)
 const DATABASE_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
@@ -130,5 +131,29 @@ describe('réservations', () => {
       .set('Content-Type', 'application/json')
       .send('{"customerName":');
     expect(res.status).toBe(400);
+  });
+});
+
+describe('filtre des réservations par salle', () => {
+  it('sans filtre, renvoie toutes les réservations', async () => {
+    const res = await request(app).get('/api/reservations');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(6);
+  });
+
+  it('avec une salle valide, ne renvoie que les réservations de cette salle', async () => {
+    const created = await request(app).post('/api/reservations').send(valid);
+    const res = await request(app).get('/api/reservations').query({ room: 'Hopper' });
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBeGreaterThan(0);
+    expect(res.body.every((r: { room: string }) => r.room === 'Hopper')).toBe(true);
+    expect(res.body.some((r: { id: number }) => r.id === created.body.id)).toBe(true);
+  });
+
+  it('avec une salle inconnue, répond 400 avec la liste des salles possibles', async () => {
+    const res = await request(app).get('/api/reservations').query({ room: 'Inconnue' });
+    expect(res.status).toBe(400);
+    expect(res.body.rooms).toEqual(Object.keys(ROOMS));
+    expect(res.body.message).toContain('Hopper');
   });
 });

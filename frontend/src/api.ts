@@ -41,7 +41,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listReservations: () => request<Reservation[]>('/api/reservations'),
+    listReservations: (room?: string) =>
+      request<Reservation[]>(room ? `/api/reservations?room=${encodeURIComponent(room)}` : '/api/reservations'),
   listRooms: () => request<Room[]>('/api/rooms'),
   createReservation: (input: NewReservation) =>
     request<Reservation>('/api/reservations', { method: 'POST', body: JSON.stringify(input) }),
