@@ -66,8 +66,22 @@ export function createApp({
     res.json(Object.entries(ROOMS).map(([name, capacity]) => ({ name, capacity })));
   });
 
-  app.get('/api/reservations', async (_req, res) => {
-    res.json(await reservations.list());
+  app.get('/api/reservations', async (req, res) => {
+    const room = req.query.room;
+    if (room === undefined) {
+      res.json(await reservations.list());
+      return;
+    }
+    const rooms = Object.keys(ROOMS);
+    if (typeof room !== 'string' || !rooms.includes(room)) {
+      res.status(400).json({
+        error: 'validation',
+        message: `La salle doit être l'une des suivantes : ${rooms.join(', ')}.`,
+        rooms,
+      });
+      return;
+    }
+    res.json(await reservations.list(room));
   });
 
   app.post('/api/reservations', async (req, res) => {
