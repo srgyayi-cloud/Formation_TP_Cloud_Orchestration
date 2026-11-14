@@ -77,12 +77,16 @@ function renderReservations() {
 }
 
 async function loadReservations() {
+  const room = roomFilter.value;
   try {
-    reservations = await api.listReservations(roomFilter.value || undefined);
+    const result = await api.listReservations(room || undefined);
+    if (room !== roomFilter.value) return; // réponse périmée : une autre salle a été choisie entre-temps
+    reservations = result;
     setMessage(listMessage, '');
     renderReservations();
   } catch {
-    setMessage(listMessage, "Impossible de charger les réservations : l'API est-elle démarrée ?", 'error');
+    if (room !== roomFilter.value) return;
+    setMessage(listMessage, "Impossible de charger les réservations : l'API est-elle démarrée?", 'error');
   }
 }
 
