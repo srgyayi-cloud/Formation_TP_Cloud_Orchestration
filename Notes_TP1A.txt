@@ -1,0 +1,79 @@
+Ex 1 :
+
+Pourquoi créer le dépôt GitHub vide ? Si GitHub y ajoute un README ou un .gitignore, 
+il crée un premier commit qui n’a rien à voir avec l’historique du projet cloné. Mon git push 
+serait alors refusé, ou il faudrait fusionner deux historiques sans ancêtre commun. Un dépôt vide 
+reçoit l’historique tel quel.
+
+À quoi sert upstream ? Il garde le lien avec le dépôt d’origine, alors que origin pointe vers 
+mon dépôt. Je peux ainsi récupérer les corrections ou nouveautés de l’enseignant avec git fetch 
+upstream puis git merge main, sans toucher à mon travail sur origin.
+
+Ex 2 :
+
+Le bandeau affiche la version 0.0.0-local et elle correspond à la valeur par défaut définit dans la configuration du backend.
+
+http://localhost:3000/health/live renvoie {"status":"ok"} et {"status":"ready","checks":{"database":"ok"}}
+
+GET /health/live vérifie que l'API est bien en fonctionnement, tandis que 
+
+GET /health/ready vérifie que l'API est prête à fonctionner, notamment en vérifiant l'accès à la base de données.
+
+L'API trouve la base en utilisant l'adresse de connexion par défaut DEFAULT_DATABASE_URL =
+  'postgres://reservations:reservations@localhost:5432/reservations' présente dans le fichier config.ts
+  backend.
+
+Au premier démarrage, Docker lit le fichier docker.compose.yaml pour créer la base et le volume associé 
+
+Ex 3 :
+
+Requête : curl http://localhost:3000/api/reservations, Code HTTP : 200 OK, Signification : La liste des réservations a été récupérée avec succès
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" 
+-d '{"customerName":"Ada Lovelace","email":"ada@example.com","room":"Hopper","date":"2030-01-20",
+"startTime":"09:00","endTime":"10:00","participants":3}', Code HTTP : 201 Created, Signification : La réservation d'Ada Lovelace a été créée 
+avec succès et porte l'identifiant 7.
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" -d '{"customerName":"Grace Hopper",
+"email":"grace@example.com","room":"Hopper","date":"2030-01-20","startTime":"09:30","endTime":"10:30","participants":2}',
+Code HTTP :  409 Conflict, Signification : L'API refuse la réservation, car la salle Hopper est déjà réservée sur une partie du créneau demandé.
+
+Requête : curl.exe -i -X POST http://localhost:3000/api/reservations -H "Content-Type: application/json" -d '{"customerName":"A","email":"pas-un-email",
+"room":"Inconnue","date":"2020-02-28","startTime":"15:00","endTime":"14:00","participants":99}',
+Code HTTP : 400 Bad Request, Signification : l’API a bien détecté plusieurs erreurs dans la réservation. le champ participants n’apparaît pas dans la réponse. 
+Cela signifie que l’API n’a pas signalé cette erreur dans les détails retournés, même si 99 dépasse bien la capacité de la salle Hopper (8 personnes).
+
+Requête : curl -i -X DELETE http://localhost:3000/api/reservations/1, Code HTTTP : 204 No Content, 
+Signification : la réservation n° 1 a été annulée avec succès.
+
+Requête : curl -i -X DELETE http://localhost:3000/api/reservations/9999, Code HTTP : 404 Not Found,
+Signification : la réservation n° 9999 n’existe pas.
+
+Ex 4 :
+
+1-
+npm run lint lance tsc --noEmit : c’est une vérification des types TypeScript, sans ESLint et sans 
+produire de fichiers.
+npm test lance vitest run et exécute les tests automatisés.
+npm run build produit la version livrable. Dans le backend, tsc compile vers dist/. Dans le frontend, 
+il vérifie d’abord les types (tsc --noEmit), puis vite build génère les fichiers statiques.
+
+2-
+Le backend compte 20 tests:
+6 tests unitaires dans validation.test.ts (règles de validation) qui n’ont pas besoin de la base.
+14 tests d’intégration dans app.test.ts qui ont besoin de PostgreSQL. 
+
+Le frontend compte 3 tests (format.test.ts), sans base.
+
+3-
+Après npm test, les réservations de démonstration ont disparu : l’interface affiche des réservations
+en janvier 2030 à la place. Chaque test d’intégration commence par vider la table (TRUNCATE) puis la 
+remplit avec des données de test fixes. Comme les tests utilisent la même base que l’API, ils écrasent 
+les données de démonstration. On les retrouve avec npm run db:reset, qui recrée les six réservations 
+avec des dates calculées à partir du jour courant.
+
+4- Qu’est-ce qui garantit que chacun lance ces vérifications ?
+Rien, seulement la discipline de chacun
+
+
+
