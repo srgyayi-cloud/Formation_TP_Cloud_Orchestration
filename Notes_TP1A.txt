@@ -75,5 +75,5 @@ avec des dates calculées à partir du jour courant.
 4- Qu’est-ce qui garantit que chacun lance ces vérifications ?
 Rien, seulement la discipline de chacun
 
-Ex 5 :
+
 
