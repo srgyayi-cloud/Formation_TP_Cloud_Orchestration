@@ -4,6 +4,7 @@ import { createApp } from '../src/app.js';
 import { DEFAULT_DATABASE_URL } from '../src/config.js';
 import { createDatabase, migrate } from '../src/db.js';
 import { resetDatabase } from '../src/seed.js';
+import { ROOMS } from '../src/reservations.js';
 
 // Tests d'intégration : nécessitent un PostgreSQL (docker compose up -d db)
 const DATABASE_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
@@ -152,7 +153,7 @@ describe('filtre des réservations par salle', () => {
   it('avec une salle inconnue, répond 400 avec la liste des salles possibles', async () => {
     const res = await request(app).get('/api/reservations').query({ room: 'Inconnue' });
     expect(res.status).toBe(400);
-    expect(res.body.rooms).toEqual(['Turing', 'Lovelace', 'Hopper']);
+    expect(res.body.rooms).toEqual(Object.keys(ROOMS));
     expect(res.body.message).toContain('Hopper');
   });
 });
