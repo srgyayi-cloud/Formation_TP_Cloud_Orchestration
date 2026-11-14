@@ -5,6 +5,7 @@ export const ROOMS: Record<string, number> = {
   Lovelace: 20,
   Hopper: 8,
   Liskov: 10,
+  Knuth: 16,
 };
 
 export type ReservationStatus = 'confirmed' | 'cancelled';
