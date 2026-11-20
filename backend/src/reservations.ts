@@ -161,7 +161,7 @@ export class ReservationRepository {
         const overlap = await client.query<ReservationRow>(
           `SELECT ${COLUMNS} FROM reservations
            WHERE room = $1 AND reservations.date = $2 AND status = 'confirmed'
-             AND reservations.start_time < $3 AND reservations.end_time >= $4
+             AND reservations.start_time < $3 AND reservations.end_time > $4
            LIMIT 1`,
           [input.room, input.date, input.endTime, input.startTime],
         );
