@@ -56,3 +56,63 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  images:
+    name: Construire et tester les images
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION: 1.0.0
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Construire l'image de l'API
+        run: >
+          docker build -t reservations-backend:${{ env.APP_VERSION }}
+          --build-arg APP_VERSION=${{ env.APP_VERSION }}
+          --build-arg GIT_COMMIT=${{ github.sha }}
+          backend
+
+      - name: Construire l'image de l'interface
+        run: >
+          docker build -t reservations-frontend:${{ env.APP_VERSION }}
+          --build-arg APP_VERSION=${{ env.APP_VERSION }}
+          frontend
+
+      - name: Démarrer la base
+        run: |
+          docker network create reservations
+          docker run -d --name db --network reservations \
+            -e POSTGRES_USER=reservations -e POSTGRES_PASSWORD=reservations -e POSTGRES_DB=reservations \
+            postgres:17-alpine
+          for i in $(seq 1 30); do
+            docker exec db pg_isready -U reservations && exit 0
+            sleep 2
+          done
+          echo "La base n'est pas prête" && exit 1
+
+      - name: Démarrer l'API
+        run: |
+          docker run -d --name api --network reservations -p 3000:3000 \
+            -e DATABASE_URL=postgres://reservations:reservations@db:5432/reservations \
+            reservations-backend:${{ env.APP_VERSION }}
+
+      - name: Attendre que l'API soit healthy
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' api)
+            echo "API : $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 2
+          done
+          echo "L'API n'est pas devenue healthy" && exit 1
+
+      - name: Vérifier que /version renvoie le SHA du commit
+        run: |
+          curl -fsS localhost:3000/version | tee version.json
+          grep -q "${{ github.sha }}" version.json
+
+      - name: Afficher les journaux de l'API
+        if: failure()
+        run: docker logs api
