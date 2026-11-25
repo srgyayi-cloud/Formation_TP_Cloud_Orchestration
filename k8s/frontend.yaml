@@ -4,7 +4,7 @@ kind: ConfigMap
 metadata:
   name: frontend-config
 data:
-  APP_VERSION: "1.0.0"
+  APP_VERSION: "1.1.0"
   API_URL: "http://backend:3000"
 
 ---
@@ -13,8 +13,17 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  annotations:
+    kubernetes.io/change-cause: "Déploiement version 1.1.0"
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 120
   selector:
     matchLabels:
       app: frontend
@@ -25,12 +34,33 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: reservations-frontend:1.0.0
+        image: reservations-frontend:1.1.0
         ports:
         - containerPort: 80
         envFrom:
         - configMapRef:
             name: frontend-config
+
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 80
+        periodSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 3
+
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          port: 80
+        periodSeconds: 5
+        timeoutSeconds: 2
+        failureThreshold: 3
+
+      lifecycle:
+        preStop:
+          exec:
+            command: ["/bin/sh", "-c", "sleep 5"]
 
 ---
 # Service : adresse fixe "frontend:80"
