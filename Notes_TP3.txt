@@ -1,0 +1,60 @@
+I
+1. Commandes et ordre
+Pour le backend comme pour le frontend : npm ci (installer les dépendances), 
+npm run lint (vérifier les types TypeScript), npm test (lancer les tests), 
+npm run build (construire la version exécutable de l’application : le TypeScript 
+du backend est compilé en JavaScript, et le frontend est assemblé en fichiers HTML, 
+JS et CSS pour le navigateur, le tout dans dist/). On commence par les vérifications 
+les plus rapides pour échouer tôt.
+
+2. npm ci plutôt que npm install
+npm ci installe exactement les versions notées dans package-lock.json et part d’un 
+node_modules vide. Il échoue si package.json et le lockfile ne correspondent pas, 
+alors que npm install peut modifier le lockfile. La CI donne ainsi le même résultat
+ à chaque exécution.
+
+3. Événements de déclenchement
+La CI se déclenche à chaque push (pour vérifier le code dès qu’il est envoyé, sur 
+n’importe quelle branche) et à chaque pull_request (pour vérifier le code avant sa 
+fusion dans main, résultat affiché dans la PR et utilisable pour bloquer la fusion).
+
+4. Version de Node.js
+Node 24, la même que celle du Dockerfile (node:24-alpine). On teste sur la version 
+qui tournera en production, pour éviter un test qui passe en CI mais échoue dans le conteneur.
+
+5. Besoins des tests de l’API
+Les tests de l’API ont besoin d’une vraie base PostgreSQL, accessible via DATABASE_URL. 
+La base peut être vide : les tests créent eux-mêmes les tables (migrations) et remettent 
+des données propres avant chaque test. La CI fournit donc un PostgreSQL jetable et attend qu’il soit prêt.
+
+II/ III/ IV
+Avant le cache, npm ci durait 3 s (backend) et 3 s (frontend). Après activation du cache 
+(cache: npm, lockfile de chaque application), il dure 2 s et 1 s : le journal indique « Cache hit ». 
+Le gain est limité car les projets sont petits, mais il augmenterait avec le nombre de 
+dépendances. concurrency annule l’exécution en cours quand un nouveau push arrive sur la même branche, 
+et permissions: contents: read limite le jeton à la lecture du code.
+
+VI 
+Le job qui échoue est « Vérifier backend », à l’étape « Tests » (le frontend reste vert et le job d’images est ignoré). Le message AssertionError: expected 409 to be 201 dans le test « accepte un créneau contigu » (app.test.ts, ligne 100) indique que l’API a refusé avec un conflit un créneau qui aurait dû être accepté : la détection de chevauchement considère à tort deux créneaux contigus comme se chevauchant.
+
+Imaginez que cette régression ait atteint main avant la protection. Quelle est la conduite à tenir, et pourquoi ?
+
+On rétablit d’abord un main sain en annulant le commit fautif avec git revert (via une PR), sans réécrire l’historique partagé ni forcer un push. On prévient l’équipe, puis on corrige la cause sur une branche, avec une PR et un test qui protège la règle. Rétablir rapidement évite que d’autres personnes construisent sur un main cassé, et le revert garde une trace claire de l’incident.
+
+VII
+
+Faut-il relancer toute la CI du frontend quand seul le backend a changé ? Comment l'éviter, et quel piège cela pose-t-il avec les checks obligatoires ?
+
+On peut éviter de relancer le frontend en ne lançant son contrôle que si des fichiers de frontend/ ont changé. Mais si ce contrôle est obligatoire pour fusionner et qu’il ne se lance pas du tout, GitHub attend un résultat qui n’arrive jamais et la pull request reste bloquée.
+
+Pourquoi ne pas publier les images ou déployer depuis une pull request ?
+
+Le code d’une PR n’est pas encore relu ni validé : il peut contenir une erreur, ou du code malveillant. Publier ou déployer depuis une PR mettrait ce code non validé dans le registre ou en production. On publie et on déploie seulement depuis main, après fusion, quand le code a passé la relecture et les vérifications.
+
+Une CI verte garantit-elle que l'application fonctionne en production ?
+
+Non. Une CI verte garantit seulement que ce qui est testé passe, dans l’environnement de la CI. Elle ne couvre ni les cas non testés, ni les différences avec la production (configuration, secrets).
+
+Combien de temps dure votre CI ? Quel est l'intérêt de la garder courte ?
+
+Les jobs verify (backend et frontend en parallèle) durent environ 23 s chacun, et la CI complète entre 1 et 2 minutes (le job d’images est le plus long). Garder la CI courte donne un retour rapide : on corrige pendant qu’on a encore le contexte en tête, on la lance sans hésiter à chaque modification, et on est moins tenté de la contourner.
